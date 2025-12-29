@@ -3,6 +3,64 @@ import { useState, useMemo, useRef } from "react";
 import { parseCsv } from "../lib/csv";
 
 /* -------------------------------------------------
+   CATEGORY MEMORY (learn from manual edits)
+-------------------------------------------------- */
+const CATEGORY_MEMORY_KEY = "BUDGETR_CATEGORY_MEMORY_V1";
+
+function normalizeMerchantKey(desc = "") {
+  let d = String(desc || "").toLowerCase().trim();
+
+  // remove common noise
+  d = d.replace(/\b\d{4}-\d{2}-\d{2}\b/g, "");
+  d = d.replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, "");
+  d = d.replace(/\b(ref|id|trace|auth|confirmation)\b[:\s-]*[a-z0-9-]+/g, "");
+  d = d.replace(/[#*]/g, " ");
+  d = d.replace(/\s+/g, " ").trim();
+
+  // keep it short to avoid unstable keys
+  if (d.length > 48) d = d.slice(0, 48).trim();
+
+  return d;
+}
+
+function loadCategoryMemory() {
+  try {
+    const raw = localStorage.getItem(CATEGORY_MEMORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCategoryMemory(map) {
+  try {
+    localStorage.setItem(CATEGORY_MEMORY_KEY, JSON.stringify(map || {}));
+  } catch {
+    // ignore
+  }
+}
+
+function rememberCategory(description, category) {
+  const cat = String(category || "").trim();
+  if (!cat || cat === "Uncategorized") return;
+
+  const key = normalizeMerchantKey(description);
+  if (!key) return;
+
+  const map = loadCategoryMemory();
+  map[key] = cat;
+  saveCategoryMemory(map);
+}
+
+function lookupRememberedCategory(description) {
+  const key = normalizeMerchantKey(description);
+  if (!key) return null;
+  const map = loadCategoryMemory();
+  return map[key] || null;
+}
+
+/* -------------------------------------------------
    CATEGORY OPTIONS
 -------------------------------------------------- */
 const CATEGORY_OPTIONS = [
@@ -281,10 +339,13 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
         let category = tx.category || "";
         const guessed = guessCategory(tx.description);
 
+        // If the CSV didn't provide a real category, try learned memory
+        const remembered = lookupRememberedCategory(tx.description);
+
         if (guessed === "Rent") {
           category = "Rent";
         } else if (!category || category.toLowerCase() === "uncategorized") {
-          category = guessed || "Uncategorized";
+          category = remembered || guessed || "Uncategorized";
         }
 
         return {
@@ -617,12 +678,14 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
                       className="bg-[#050505] border border-gray-700 text-xs rounded px-2 py-1"
                       value={t.category || "Uncategorized"}
                       onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const nextCat = e.target.value;
+                        rememberCategory(t.description, nextCat);
                         onUpdateTransaction({
                           ...t,
-                          category: e.target.value,
-                        })
-                      }
+                          category: nextCat,
+                        });
+                      }}
                     >
                       {CATEGORY_OPTIONS.map((cat) => (
                         <option key={cat} value={cat}>
@@ -773,6 +836,7 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
                       guessCategory(editing.description) ||
                       "Uncategorized",
                   };
+                  rememberCategory(toSave.description, toSave.category);
                   onUpdateTransaction(toSave);
                   setEditing(null);
                 }}
