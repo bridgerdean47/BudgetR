@@ -30,6 +30,17 @@ function splitCsvLine(line) {
 function normalizeDate(str) {
   if (!str) return "";
 
+  // Already ISO format with dashes (YYYY-MM-DD) — return as-is
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+
+  // YYYY/MM/DD or YYYY/M/D — convert slashes to dashes
+  const isoSlash = str.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (isoSlash) {
+    const [, yy, mm, dd] = isoSlash;
+    return `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+
+  // MM/DD/YYYY or M/D/YY
   const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (m) {
     let [, mm, dd, yy] = m;
@@ -464,6 +475,75 @@ export function parseCsv(text, startId = 0) {
         source: "generic",
       });
       continue;
+    }
+
+    /* ---------- Flexible fallback: find columns by name ---------- */
+    // Handles any CSV that has date/description/amount columns in any position
+    {
+      const dateIdx = headerCells.findIndex((h) =>
+        /^(date|transaction\s*date|posting\s*date|trans\s*date|effective\s*date)$/.test(h)
+      );
+      const descIdx = headerCells.findIndex((h) =>
+        /^(description|desc|memo|name|payee|merchant|narrative|details|transaction\s*description)$/.test(h)
+      );
+      const amountIdx = headerCells.findIndex((h) =>
+        /^(amount|transaction\s*amount|debit\/credit|value)$/.test(h)
+      );
+
+      // Also try separate debit/credit columns as a fallback for amount
+      const debitIdx = headerCells.findIndex((h) => /^(debit|withdrawal|withdrawals)$/.test(h));
+      const creditIdx = headerCells.findIndex((h) => /^(credit|deposit|deposits)$/.test(h));
+
+      const hasAmount = amountIdx !== -1 || (debitIdx !== -1 || creditIdx !== -1);
+
+      if (dateIdx !== -1 && descIdx !== -1 && hasAmount) {
+        const dateStr = (cells[dateIdx] ?? "").trim();
+        const desc = (cells[descIdx] ?? "").trim();
+
+        let rawAmount;
+        if (amountIdx !== -1) {
+          rawAmount = parseAmount(cells[amountIdx] || "");
+        } else {
+          // Separate debit/credit columns — debits are outflows (negative), credits are inflows (positive)
+          const debitVal = debitIdx !== -1 ? parseAmount(cells[debitIdx] || "") : NaN;
+          const creditVal = creditIdx !== -1 ? parseAmount(cells[creditIdx] || "") : NaN;
+          if (isFinite(creditVal) && creditVal !== 0) {
+            rawAmount = creditVal;
+          } else if (isFinite(debitVal) && debitVal !== 0) {
+            rawAmount = -Math.abs(debitVal);
+          } else {
+            rawAmount = NaN;
+          }
+        }
+
+        if (!isFinite(rawAmount) || rawAmount === 0) continue;
+
+        const d = desc.toLowerCase();
+        let type;
+        if (isEpayTransfer(d)) {
+          type = "transfer";
+        } else if (
+          d.includes("payment thank you") ||
+          d.includes("credit card payment") ||
+          d.includes("cc payment") ||
+          d.includes("chase credit crd")
+        ) {
+          type = "transfer";
+        } else {
+          type = rawAmount > 0 ? "income" : "expense";
+        }
+
+        out.push({
+          id: startId + out.length,
+          date: normalizeDate(dateStr),
+          description: desc,
+          amount: Math.abs(rawAmount),
+          type,
+          category: guessCategory(desc),
+          source: "generic",
+        });
+        continue;
+      }
     }
   }
 
