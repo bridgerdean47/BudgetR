@@ -7,6 +7,7 @@ import GoalsPage from "./pages/GoalsPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import logo from "./assets/logo.png";
+import HistoryPage from "./pages/HistoryPage.jsx";
 
 import { auth, db } from "./lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -84,6 +85,8 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | saved | error
   const [lastSavedAt, setLastSavedAt] = useState(null); // Date | null
 
+  const [actionHistory, setActionHistory] = useState([]); // [{id, label, ts, transactions, imports, goals}]
+
   const saveTimerRef = useRef(null);
   const initialLoadRef = useRef(false);
 
@@ -153,6 +156,32 @@ export default function App() {
       const updated = { ...g, current: nextCurrent };
       return [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
     });
+  };
+
+  /* -----------------------------
+     History / Revert
+  ------------------------------ */
+  const pushSnapshot = (label) => {
+    setActionHistory((prev) => {
+      const entry = {
+        id: `${Date.now()}-${Math.random()}`,
+        label,
+        ts: Date.now(),
+        transactions: [...transactions],
+        imports: [...imports],
+        goals: [...goals],
+      };
+      return [entry, ...prev].slice(0, 20);
+    });
+  };
+
+  const handleRevert = (entryId) => {
+    const entry = actionHistory.find((e) => e.id === entryId);
+    if (!entry) return;
+    setTransactions(entry.transactions);
+    setImports(entry.imports);
+    setGoals(entry.goals);
+    setActionHistory((prev) => prev.filter((e) => e.ts < entry.ts));
   };
 
   /* -----------------------------
@@ -234,6 +263,8 @@ export default function App() {
   };
 
   const handleDeleteTransaction = (id) => {
+    const tx = transactions.find((t) => String(t.id) === String(id));
+    pushSnapshot(`Deleted transaction: ${tx?.description || id}`);
     setTransactions((prev) => {
       const existing = prev.find((t) => String(t.id) === String(id));
       if (existing?.goalApplied) {
@@ -244,6 +275,7 @@ export default function App() {
   };
 
   const handleClearTransactions = () => {
+    pushSnapshot(`Cleared all transactions (${transactions.length})`);
     setTransactions((prev) => {
       prev.forEach((tx) => {
         if (tx?.goalApplied) {
@@ -256,6 +288,9 @@ export default function App() {
   };
 
   const handleDeleteImportBatch = (importId) => {
+    const batch = imports.find((b) => b.id === importId);
+    const batchName = (batch?.files || []).map((f) => f.name).join(", ") || importId;
+    pushSnapshot(`Deleted import: ${batchName}`);
     setTransactions((prev) => {
       prev.forEach((tx) => {
         if (tx?.importId === importId && tx?.goalApplied) {
@@ -441,6 +476,7 @@ export default function App() {
     { id: "budget", label: "Estimate" },
     { id: "goals", label: "Goals" },
     { id: "reports", label: "Reports" },
+    { id: "history", label: "History" },
   ];
 
   /* -----------------------------
@@ -597,6 +633,14 @@ export default function App() {
 
         {activeTab === "reports" && (
           <ReportsPage cardClass={cardClass} transactions={filteredTransactions} />
+        )}
+
+        {activeTab === "history" && (
+          <HistoryPage
+            cardClass={cardClass}
+            actionHistory={actionHistory}
+            onRevert={handleRevert}
+          />
         )}
       </main>
     </div>
