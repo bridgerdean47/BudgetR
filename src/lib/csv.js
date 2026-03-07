@@ -64,7 +64,15 @@ function parseAmount(str) {
 function guessCategory(desc = "") {
   if (!desc) return "Uncategorized";
 
-  const d = desc.toLowerCase();
+  // Strip common bank description prefixes so merchant matching works on any bank format
+  // e.g. "POS PURCHASE WALMART #1234" → "walmart #1234"
+  const d = desc
+    .toLowerCase()
+    .replace(
+      /^(pos purchase|pos debit|debit card purchase|check card purchase|ach debit|ach credit|ach payment|online transfer|electronic payment|preauthorized debit|preauthorized credit|recurring payment|bill payment|web payment|phone payment|teller|atm withdrawal|atm deposit|mobile deposit|mobile check deposit|wire transfer|direct debit|direct deposit|point of sale purchase|debit|credit)\s*/i,
+      ""
+    )
+    .trim();
 
   // 🏠 RENT - HIGHEST PRIORITY (check first!)
   if (
@@ -77,7 +85,11 @@ function guessCategory(desc = "") {
     d.startsWith("apts ") ||
     d.includes(" rent") ||
     d.startsWith("rent") ||
-    d.includes("lease")
+    d.includes("lease") ||
+    d.includes("property mgmt") ||
+    d.includes("property management") ||
+    d.includes("realty") ||
+    d.includes("landlord")
   ) {
     return "Rent";
   }
@@ -88,7 +100,15 @@ function guessCategory(desc = "") {
     d.includes("chase credit card") ||
     d.includes("credit card payment") ||
     d.includes("cc payment") ||
-    d.includes("payment thank you")
+    d.includes("payment thank you") ||
+    d.includes("autopay payment") ||
+    d.includes("citi card") ||
+    d.includes("capital one") ||
+    d.includes("discover card") ||
+    d.includes("amex payment") ||
+    d.includes("american express payment") ||
+    d.includes("synchrony bank") ||
+    d.includes("barclays")
   ) {
     return "Credit Card Payments";
   }
@@ -96,8 +116,19 @@ function guessCategory(desc = "") {
   // 💰 LOANS
   if (
     d.includes("dept education") ||
+    d.includes("dept of ed") ||
+    d.includes("dept. of ed") ||
     d.includes("student loan") ||
-    d.includes("loan payment")
+    d.includes("loan payment") ||
+    d.includes("nelnet") ||
+    d.includes("navient") ||
+    d.includes("mohela") ||
+    d.includes("sallie mae") ||
+    d.includes("great lakes") ||
+    d.includes("auto loan") ||
+    d.includes("car loan") ||
+    d.includes("mortgage payment") ||
+    /\bmortgage\b/.test(d)
   ) {
     return "Loans";
   }
@@ -105,12 +136,41 @@ function guessCategory(desc = "") {
   // 🔌 BILLS & UTILITIES
   if (
     d.includes("quantum fiber") ||
+    d.includes("xfinity") ||
+    d.includes("comcast") ||
+    d.includes("cox comm") ||
+    d.includes("spectrum") ||
+    d.includes("at&t") ||
+    d.includes("att.com") ||
+    d.includes("verizon") ||
+    d.includes("t-mobile") ||
+    d.includes("tmobile") ||
+    d.includes("sprint") ||
+    d.includes("boost mobile") ||
+    d.includes("cricket wireless") ||
+    d.includes("metro pcs") ||
+    d.includes("metropcs") ||
     d.includes("internet") ||
     d.includes("power company") ||
     d.includes("electric") ||
-    d.includes("water") ||
+    d.includes("water bill") ||
+    d.includes("water dept") ||
     d.includes("gas & electric") ||
-    d.includes("utility")
+    d.includes("pge") ||
+    d.includes("pg&e") ||
+    d.includes("rocky mountain power") ||
+    d.includes("pacific power") ||
+    d.includes("idaho power") ||
+    d.includes("utility") ||
+    d.includes("utilities") ||
+    d.includes("waste management") ||
+    d.includes("republic services") ||
+    d.includes("sewage") ||
+    d.includes("garbage") ||
+    d.includes("trash pickup") ||
+    /\bxcel energy\b/.test(d) ||
+    /\bduke energy\b/.test(d) ||
+    /\bsouthern company\b/.test(d)
   ) {
     return "Bills & Utilities";
   }
@@ -122,9 +182,39 @@ function guessCategory(desc = "") {
     d.includes("wal mart") ||
     d.includes("winco") ||
     d.includes("grocery") ||
+    d.includes("groceries") ||
     d.includes("safeway") ||
     d.includes("kroger") ||
-    d.includes("albertsons")
+    d.includes("albertsons") ||
+    d.includes("fred meyer") ||
+    d.includes("smiths food") ||
+    d.includes("smith's") ||
+    d.includes("smiths #") ||
+    d.includes("harmons") ||
+    d.includes("trader joe") ||
+    d.includes("whole foods") ||
+    d.includes("sprouts") ||
+    d.includes("aldi") ||
+    d.includes("publix") ||
+    d.includes("h-e-b") ||
+    d.includes("heb ") ||
+    d.includes("meijer") ||
+    d.includes("wegmans") ||
+    d.includes("food lion") ||
+    d.includes("giant food") ||
+    d.includes("stop & shop") ||
+    d.includes("stop and shop") ||
+    d.includes("hy-vee") ||
+    d.includes("hyvee") ||
+    d.includes("food 4 less") ||
+    d.includes("grocery outlet") ||
+    d.includes("market basket") ||
+    d.includes("fresh market") ||
+    d.includes("natural grocers") ||
+    d.includes("costco") ||
+    d.includes("sam's club") ||
+    d.includes("bj's wholesale") ||
+    d.includes("supermarket")
   ) {
     return "Groceries";
   }
@@ -138,9 +228,68 @@ function guessCategory(desc = "") {
     d.includes("subway") ||
     d.includes("restaurant") ||
     d.includes("cafe") ||
+    d.includes("coffee") ||
     d.includes("pizza") ||
     d.includes("starbucks") ||
-    d.includes("dunkin")
+    d.includes("dunkin") ||
+    d.includes("chipotle") ||
+    d.includes("panera") ||
+    d.includes("chick-fil-a") ||
+    d.includes("chick fil a") ||
+    d.includes("chickfila") ||
+    d.includes("popeye") ||
+    d.includes("kfc") ||
+    d.includes("domino") ||
+    d.includes("papa john") ||
+    d.includes("little caesars") ||
+    d.includes("pizza hut") ||
+    d.includes("five guys") ||
+    d.includes("in-n-out") ||
+    d.includes("in n out") ||
+    d.includes("whataburger") ||
+    d.includes("sonic drive") ||
+    d.includes("sonic #") ||
+    d.includes("dairy queen") ||
+    d.includes("arby") ||
+    d.includes("panda express") ||
+    d.includes("olive garden") ||
+    d.includes("applebee") ||
+    d.includes("chili") ||
+    d.includes("denny") ||
+    d.includes("ihop") ||
+    d.includes("waffle house") ||
+    d.includes("cracker barrel") ||
+    d.includes("cheesecake factory") ||
+    d.includes("red lobster") ||
+    d.includes("outback") ||
+    d.includes("sushi") ||
+    d.includes("donut") ||
+    d.includes("doughnut") ||
+    d.includes("smoothie") ||
+    d.includes("jamba juice") ||
+    d.includes("dutch bros") ||
+    d.includes("portillo") ||
+    d.includes("shake shack") ||
+    d.includes("wingstop") ||
+    d.includes("raising cane") ||
+    d.includes("jersey mike") ||
+    d.includes("jimmy john") ||
+    d.includes("firehouse sub") ||
+    d.includes("noodle") ||
+    d.includes("deli") ||
+    d.includes("bakery") ||
+    d.includes("bar & grill") ||
+    d.includes("grille") ||
+    d.includes("bistro") ||
+    d.includes("tavern") ||
+    d.includes("brewing") ||
+    d.includes("brewery") ||
+    d.includes("winery") ||
+    d.includes("doordash") ||
+    d.includes("grubhub") ||
+    d.includes("ubereats") ||
+    d.includes("uber eats") ||
+    d.includes("instacart")
   ) {
     return "Food & Drink";
   }
@@ -151,7 +300,31 @@ function guessCategory(desc = "") {
     d.includes("chevron") ||
     d.includes("gas station") ||
     d.includes("exxon") ||
-    d.includes("bp gas")
+    d.includes("mobil") ||
+    d.includes("bp gas") ||
+    d.includes("bp #") ||
+    d.includes("sinclair") ||
+    d.includes("conoco") ||
+    d.includes("texaco") ||
+    d.includes("valero") ||
+    d.includes("marathon") ||
+    d.includes("sunoco") ||
+    d.includes("circle k") ||
+    d.includes("kwik trip") ||
+    d.includes("kwik star") ||
+    d.includes("casey") ||
+    d.includes("murphy usa") ||
+    d.includes("murphy express") ||
+    d.includes("76 gas") ||
+    d.includes("arco") ||
+    d.includes("love's travel") ||
+    d.includes("pilot flying") ||
+    d.includes("flying j") ||
+    d.includes("speedway") ||
+    d.includes("raceway fuel") ||
+    d.includes("holiday station") ||
+    d.includes("fuel station") ||
+    /\bgas\s*#\s*\d/.test(d)
   ) {
     return "Gas";
   }
@@ -162,11 +335,76 @@ function guessCategory(desc = "") {
     d.includes("netflix") ||
     d.includes("hulu") ||
     d.includes("youtube") ||
+    d.includes("youtube premium") ||
     d.includes("disney+") ||
+    d.includes("disney plus") ||
+    d.includes("disneyplus") ||
     d.includes("hbo") ||
-    d.includes("paramount")
+    d.includes("paramount") ||
+    d.includes("peacock") ||
+    d.includes("fubo") ||
+    d.includes("espn+") ||
+    d.includes("espn plus") ||
+    d.includes("apple tv") ||
+    d.includes("apple music") ||
+    d.includes("apple one") ||
+    d.includes("amazon prime") ||
+    d.includes("amazon music") ||
+    d.includes("pandora") ||
+    d.includes("tidal") ||
+    d.includes("siriusxm") ||
+    d.includes("sirius xm") ||
+    d.includes("xbox game pass") ||
+    d.includes("playstation") ||
+    d.includes("nintendo") ||
+    d.includes("steam ") ||
+    d.includes("steam.com") ||
+    d.includes("twitch") ||
+    d.includes("regal cinema") ||
+    d.includes("amc theatr") ||
+    d.includes("movie theater") ||
+    d.includes("cinemark") ||
+    d.includes("fandango") ||
+    d.includes("ticketmaster") ||
+    d.includes("livenation") ||
+    d.includes("live nation") ||
+    d.includes("bowling") ||
+    d.includes("golf") ||
+    d.includes("mini golf") ||
+    d.includes("laser tag") ||
+    d.includes("escape room")
   ) {
     return "Entertainment";
+  }
+
+  // 🚗 AUTOMOTIVE
+  if (
+    d.includes("autozone") ||
+    d.includes("o'reilly auto") ||
+    d.includes("oreilly auto") ||
+    d.includes("advance auto") ||
+    d.includes("napa auto") ||
+    d.includes("jiffy lube") ||
+    d.includes("valvoline") ||
+    d.includes("firestone") ||
+    d.includes("pep boys") ||
+    d.includes("goodyear") ||
+    d.includes("discount tire") ||
+    d.includes("les schwab") ||
+    d.includes("midas") ||
+    d.includes("meineke") ||
+    d.includes("safelite") ||
+    d.includes("car wash") ||
+    d.includes("carwash") ||
+    d.includes("auto repair") ||
+    d.includes("auto service") ||
+    d.includes("oil change") ||
+    d.includes("tire center") ||
+    d.includes("vehicle registration") ||
+    d.includes("dmv ") ||
+    /\bdmv\b/.test(d)
+  ) {
+    return "Automotive";
   }
 
   // ✈️ TRAVEL
@@ -174,29 +412,185 @@ function guessCategory(desc = "") {
     d.includes("flight") ||
     d.includes("hotel") ||
     d.includes("airbnb") ||
-    d.includes("airline")
+    d.includes("airline") ||
+    d.includes("southwest air") ||
+    d.includes("delta air") ||
+    d.includes("united air") ||
+    d.includes("american air") ||
+    d.includes("alaska air") ||
+    d.includes("frontier air") ||
+    d.includes("spirit air") ||
+    d.includes("jetblue") ||
+    d.includes("allegiant") ||
+    d.includes("marriott") ||
+    d.includes("hilton") ||
+    d.includes("hyatt") ||
+    d.includes("holiday inn") ||
+    d.includes("best western") ||
+    d.includes("hampton inn") ||
+    d.includes("motel 6") ||
+    d.includes("super 8") ||
+    d.includes("vrbo") ||
+    d.includes("expedia") ||
+    d.includes("booking.com") ||
+    d.includes("priceline") ||
+    d.includes("kayak") ||
+    d.includes("hertz") ||
+    d.includes("enterprise rent") ||
+    d.includes("avis rent") ||
+    d.includes("budget rent") ||
+    d.includes("national car") ||
+    d.includes("alamo rent") ||
+    d.includes("uber") ||
+    d.includes("lyft") ||
+    d.includes("taxi") ||
+    d.includes("train ticket") ||
+    d.includes("amtrak") ||
+    d.includes("greyhound") ||
+    d.includes("parking meter") ||
+    d.includes("toll road") ||
+    /\btoll\b/.test(d)
   ) {
     return "Travel";
   }
 
   // 🐾 PETS
-  if (d.includes("pet") || d.includes("vet")) {
+  if (
+    d.includes("petco") ||
+    d.includes("petsmart") ||
+    d.includes("pet supplies") ||
+    d.includes("pet store") ||
+    d.includes("veterinary") ||
+    d.includes("animal hospital") ||
+    d.includes("animal clinic") ||
+    d.includes("pet ") ||
+    d.includes(" vet")
+  ) {
     return "Pets";
+  }
+
+  // 🏥 HEALTH & WELLNESS
+  if (
+    d.includes("cvs") ||
+    d.includes("walgreens") ||
+    d.includes("rite aid") ||
+    d.includes("pharmacy") ||
+    d.includes("prescription") ||
+    d.includes("rx ") ||
+    d.includes("doctor") ||
+    d.includes("dentist") ||
+    d.includes("dental") ||
+    d.includes("orthodon") ||
+    d.includes("vision") ||
+    d.includes("optometry") ||
+    d.includes("optometrist") ||
+    d.includes("hospital") ||
+    d.includes("medical center") ||
+    d.includes("urgent care") ||
+    d.includes("clinic") ||
+    d.includes("health plan") ||
+    d.includes("planet fitness") ||
+    d.includes("la fitness") ||
+    d.includes("anytime fitness") ||
+    d.includes("24 hour fitness") ||
+    d.includes("24hr fitness") ||
+    d.includes("gold's gym") ||
+    d.includes("golds gym") ||
+    d.includes("ymca") ||
+    d.includes("gym ") ||
+    d.includes("yoga") ||
+    d.includes("massage") ||
+    d.includes("therapy") ||
+    d.includes("counseling") ||
+    d.includes("physical therapy")
+  ) {
+    return "Health & Wellness";
   }
 
   // 🛍️ SHOPPING
   if (
     d.includes("amazon") ||
+    d.includes("amzn") ||
     d.includes("target") ||
     d.includes("dollartree") ||
-    d.includes("dollar tree")
+    d.includes("dollar tree") ||
+    d.includes("dollar general") ||
+    d.includes("family dollar") ||
+    d.includes("best buy") ||
+    d.includes("home depot") ||
+    d.includes("lowe's") ||
+    d.includes("lowes") ||
+    d.includes("ikea") ||
+    d.includes("tj maxx") ||
+    d.includes("tjmaxx") ||
+    d.includes("marshalls") ||
+    d.includes("ross dress") ||
+    d.includes("ross store") ||
+    d.includes("burlington") ||
+    d.includes("old navy") ||
+    d.includes("gap ") ||
+    d.includes("gap.com") ||
+    d.includes("h&m") ||
+    d.includes("zara") ||
+    d.includes("forever 21") ||
+    d.includes("fashion nova") ||
+    d.includes("shein") ||
+    d.includes("macy") ||
+    d.includes("kohl") ||
+    d.includes("nordstrom") ||
+    d.includes("jcpenney") ||
+    d.includes("sears") ||
+    d.includes("ace hardware") ||
+    d.includes("menards") ||
+    d.includes("harbor freight") ||
+    d.includes("five below") ||
+    d.includes("bath & body") ||
+    d.includes("victoria secret") ||
+    d.includes("victoria's secret") ||
+    d.includes("sephora") ||
+    d.includes("ulta") ||
+    d.includes("ebay") ||
+    d.includes("etsy") ||
+    d.includes("wayfair") ||
+    d.includes("overstock") ||
+    d.includes("chewy") ||
+    d.includes("zappos") ||
+    d.includes("nike.com") ||
+    d.includes("adidas") ||
+    d.includes("dick's sporting") ||
+    d.includes("academy sport") ||
+    d.includes("rei ") ||
+    d.includes("rei.com") ||
+    d.includes("sporting goods")
   ) {
     return "Shopping";
   }
 
-  // 🏥 INSURANCE (check LAST to avoid false positives)
+  // 🏥 INSURANCE (check near last to avoid false positives)
   if (d.includes("insurance") && !d.includes("apts")) {
     return "Insurance";
+  }
+
+  // 📡 CABLE/SATELLITE
+  if (
+    d.includes("directv") ||
+    d.includes("dish network") ||
+    d.includes("cable tv") ||
+    d.includes("satellite tv")
+  ) {
+    return "Cable/Satellite Services";
+  }
+
+  // 💸 TRANSFERS TO CHECKING/SAVINGS
+  if (d.includes("transfer to checking") || d.includes("xfer to checking")) {
+    return "To Checking";
+  }
+  if (
+    d.includes("transfer to savings") ||
+    d.includes("xfer to savings") ||
+    d.includes("to savings")
+  ) {
+    return "To Savings";
   }
 
   return "Uncategorized";
