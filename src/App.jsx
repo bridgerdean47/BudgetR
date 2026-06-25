@@ -1,22 +1,34 @@
 // src/App.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import DashboardPage from "./pages/DashboardPage.jsx";
+import HomePage from "./pages/HomePage.jsx";
 import TransactionsPage from "./pages/TransactionsPage.jsx";
-import BudgetPage from "./pages/BudgetPage.jsx";
-import GoalsPage from "./pages/GoalsPage.jsx";
-import ReportsPage from "./pages/ReportsPage.jsx";
+import InsightsPage from "./pages/InsightsPage.jsx";
+import ProfilePage from "./pages/ProfilePage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import logo from "./assets/logo.png";
 
 import { auth, db } from "./lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { defaultCategoryBuckets, resolveBucket } from "./lib/buckets";
+import { NAV_ITEMS } from "./lib/nav";
+import { DEFAULT_THEME_ID, getTheme, themeToCssVars } from "./lib/themes";
+import BottomTabBar from "./components/BottomTabBar.jsx";
+import ReviewFlow from "./pages/ReviewFlow.jsx";
+import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
 
 /* -----------------------------
    Blank defaults
 ------------------------------ */
 const blankBudget = { monthLabel: "", income: [], fixed: [], variable: [] };
 const blankGoals = [];
+const blankAccounts = [];
+const blankSettings = {
+  estimatedIncomeMonthly: 0,
+  theme: DEFAULT_THEME_ID,
+  targets: { needs: 50, wants: 30, savings: 20 },
+};
 
 /* -----------------------------
    Helpers
@@ -66,14 +78,18 @@ function genId() {
    App
 ------------------------------ */
 export default function App() {
-  const [activeTab, setActiveTab] = useState("dashboard");
-  const [theme] = useState("dark");
+  const [activeTab, setActiveTab] = useState("home");
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const [transactions, setTransactions] = useState([]);
   const [imports, setImports] = useState([]);
 
   const [goals, setGoals] = useState(blankGoals);
   const [budget, setBudget] = useState(blankBudget);
+
+  const [accounts, setAccounts] = useState(blankAccounts);
+  const [categoryBuckets, setCategoryBuckets] = useState(defaultCategoryBuckets());
+  const [settings, setSettings] = useState(blankSettings);
 
   const [selectedMonth, setSelectedMonth] = useState("all");
 
@@ -119,6 +135,46 @@ export default function App() {
         return { ...g, current: Math.max(0, next) };
       })
     );
+  };
+
+  /* -----------------------------
+     Accounts helpers (manual entry for now; SimpleFin sync lands later
+     and writes into this same array with source: "simplefin")
+  ------------------------------ */
+  const handleAddAccount = (account) => {
+    setAccounts((prev) => [
+      ...prev,
+      {
+        id: genId(),
+        name: "New account",
+        type: "checking",
+        balance: 0,
+        source: "manual",
+        externalAccountId: null,
+        ...account,
+      },
+    ]);
+  };
+
+  const handleUpdateAccount = (id, changes) => {
+    setAccounts((prev) =>
+      prev.map((a) => (String(a.id) === String(id) ? { ...a, ...changes } : a))
+    );
+  };
+
+  const handleDeleteAccount = (id) => {
+    setAccounts((prev) => prev.filter((a) => String(a.id) !== String(id)));
+  };
+
+  /* -----------------------------
+     Settings + category bucket helpers
+  ------------------------------ */
+  const handleUpdateSettings = (changes) => {
+    setSettings((prev) => ({ ...prev, ...changes }));
+  };
+
+  const handleUpdateCategoryBucket = (category, bucket) => {
+    setCategoryBuckets((prev) => ({ ...prev, [category]: bucket }));
   };
 
   /* -----------------------------
@@ -280,6 +336,9 @@ export default function App() {
         setBudget(blankBudget);
         setGoals(blankGoals);
         setImports([]);
+        setAccounts(blankAccounts);
+        setCategoryBuckets(defaultCategoryBuckets());
+        setSettings(blankSettings);
         setSelectedMonth("all");
         setDataLoaded(false);
         setLastSavedAt(null);
@@ -297,6 +356,13 @@ export default function App() {
           setBudget(data.budget || blankBudget);
           setGoals(Array.isArray(data.goals) ? data.goals : blankGoals);
           setImports(Array.isArray(data.imports) ? data.imports : []);
+          setAccounts(Array.isArray(data.accounts) ? data.accounts : blankAccounts);
+          setCategoryBuckets(
+            data.categoryBuckets && typeof data.categoryBuckets === "object"
+              ? { ...defaultCategoryBuckets(), ...data.categoryBuckets }
+              : defaultCategoryBuckets()
+          );
+          setSettings({ ...blankSettings, ...(data.settings || {}) });
           setSelectedMonth(data.selectedMonth || "all");
 
           if (data.updatedAt) setLastSavedAt(new Date(data.updatedAt));
@@ -306,6 +372,9 @@ export default function App() {
             budget: blankBudget,
             goals: blankGoals,
             imports: [],
+            accounts: blankAccounts,
+            categoryBuckets: defaultCategoryBuckets(),
+            settings: blankSettings,
             selectedMonth: "all",
             updatedAt: Date.now(),
           });
@@ -314,6 +383,9 @@ export default function App() {
           setBudget(blankBudget);
           setGoals(blankGoals);
           setImports([]);
+          setAccounts(blankAccounts);
+          setCategoryBuckets(defaultCategoryBuckets());
+          setSettings(blankSettings);
           setSelectedMonth("all");
           setLastSavedAt(null);
         }
@@ -348,6 +420,9 @@ export default function App() {
             budget,
             goals,
             imports,
+            accounts,
+            categoryBuckets,
+            settings,
             selectedMonth,
             updatedAt: Date.now(),
           },
@@ -366,7 +441,7 @@ export default function App() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [user, transactions, budget, goals, imports, selectedMonth]);
+  }, [user, transactions, budget, goals, imports, accounts, categoryBuckets, settings, selectedMonth]);
 
   /* -----------------------------
      Month filtering + summary
@@ -395,9 +470,6 @@ export default function App() {
   // Dashboard leftover (credit card reduces leftover)
   const leftover = income - expenses - creditCard;
 
-  // Health score leftover (ignore credit card)
-  const leftoverNoCredit = income - expenses;
-
   const monthSummary = {
     monthLabel: formatMonthLabel(selectedMonth),
     income,
@@ -407,52 +479,46 @@ export default function App() {
     transfers,
   };
 
-  // Send a separate summary to HealthScoreCard (if you wire it that way)
-  const healthSummary = {
-    ...monthSummary,
-    leftover: leftoverNoCredit,
-    creditCard: 0, // optional, keeps it from being used accidentally
-  };
-
   /* -----------------------------
-     Styles
+     Theme + Styles
   ------------------------------ */
-  const appClass = "min-h-screen bg-[#050505] text-gray-100";
+  const activeTheme = getTheme(settings.theme);
+  const themeVarStyle = themeToCssVars(activeTheme.vars);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    StatusBar.setStyle({ style: activeTheme.mode === "dark" ? Style.Dark : Style.Light });
+  }, [activeTheme.mode]);
+
+  const appClass = "min-h-screen bg-app text-fg";
   const headerClass =
-    "border-b sticky top-0 z-50 backdrop-blur bg-[#050505cc] border-red-900 h-16";
+    "border-b sticky top-0 z-50 backdrop-blur bg-app/90 border-subtle h-16";
 
   const navActive =
-    "px-4 py-1 rounded-full border border-red-500 bg-red-500/10 text-red-300 " +
-    "transition transform hover:-translate-y-0.5 hover:shadow-[0_0_18px_rgba(248,113,113,0.7)]";
+    "px-4 py-1 rounded-full border border-accent bg-accent/10 text-accent " +
+    "transition transform hover:-translate-y-0.5 hover:shadow-lg hover:shadow-accent/50";
 
   const navInactive =
-    "px-4 py-1 rounded-full border border-gray-700 text-gray-300 " +
-    "transition transform hover:-translate-y-0.5 hover:border-red-500 hover:text-red-300 " +
-    "hover:shadow-[0_0_16px_rgba(248,113,113,0.5)]";
+    "px-4 py-1 rounded-full border border-subtle text-fgMuted " +
+    "transition transform hover:-translate-y-0.5 hover:border-accent hover:text-accent " +
+    "hover:shadow-md hover:shadow-accent/30";
 
   const cardClass =
-    "rounded-3xl p-6 border bg-[#080808] border-red-900 shadow-[0_0_40px_rgba(0,0,0,0.7)] " +
+    "rounded-3xl p-6 border bg-surface border-subtle shadow-[0_0_40px_rgba(0,0,0,0.35)] " +
     "transition-transform transition-shadow duration-200 " +
-    "hover:-translate-y-1 hover:border-red-500 hover:shadow-[0_0_40px_rgba(248,113,113,0.55)]";
+    "hover:-translate-y-1 hover:border-accent hover:shadow-lg hover:shadow-accent/40";
 
-  const tabs = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "transactions", label: "Transactions" },
-    { id: "budget", label: "Estimate" },
-    { id: "goals", label: "Goals" },
-    { id: "reports", label: "Reports" },
-  ];
 
   /* -----------------------------
      Loading / Auth gates
   ------------------------------ */
   if (!authReady) {
     return (
-      <div className={appClass}>
+      <div className={appClass} style={themeVarStyle}>
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
-            <p className="text-gray-400">Loading...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+            <p className="text-fgMuted">Loading...</p>
           </div>
         </div>
       </div>
@@ -461,7 +527,7 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className={appClass}>
+      <div className={appClass} style={themeVarStyle}>
         <header className={headerClass}>
           <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
             <div className="flex items-center">
@@ -478,7 +544,7 @@ export default function App() {
 
   if (!dataLoaded) {
     return (
-      <div className={appClass}>
+      <div className={appClass} style={themeVarStyle}>
         <header className={headerClass}>
           <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -488,8 +554,8 @@ export default function App() {
         </header>
         <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
-            <p className="text-gray-400">Loading your data...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+            <p className="text-fgMuted">Loading your data...</p>
           </div>
         </div>
       </div>
@@ -499,15 +565,19 @@ export default function App() {
   /* -----------------------------
      Render
   ------------------------------ */
+  const needsReviewCount = transactions.filter(
+    (t) => resolveBucket(t, categoryBuckets) === null
+  ).length;
+
   return (
-    <div className={appClass}>
+    <div className={appClass} style={themeVarStyle}>
       <header className={headerClass}>
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
           {/* Left: Logo + Last saved */}
           <div className="flex items-center gap-3">
             <img src={logo} alt="BudgetR logo" className="h-9 w-auto" />
             <div className="leading-tight">
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-fgMuted">
                 {saveStatus === "saving"
                   ? "Saving…"
                   : lastSavedAt
@@ -517,88 +587,104 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right: Tabs + logout */}
-          <div className="flex items-center gap-4">
-            <nav className="flex gap-2 text-sm">
-              {tabs.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  className={activeTab === t.id ? navActive : navInactive}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </nav>
-
-            <button type="button" onClick={() => signOut(auth)} className={navInactive}>
-              Log out
-            </button>
-          </div>
+          {/* Right: Tabs (desktop only — mobile uses the bottom tab bar) */}
+          <nav className="hidden md:flex gap-2 text-sm">
+            {NAV_ITEMS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={activeTab === t.id ? navActive : navInactive}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-10">
-        {activeTab === "dashboard" && (
-          <DashboardPage
-            theme={theme}
+      <main
+        className="max-w-6xl mx-auto px-6 py-10"
+        style={{ paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+      >
+        {activeTab === "home" && (
+          <HomePage
             cardClass={cardClass}
             monthSummary={monthSummary}
-            healthSummary={healthSummary}
             selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth}
             budgetTotals={budgetTotals}
-            goals={goals}
-            onContributeGoal={handleContributeGoal}
+            settings={settings}
+            categoryBuckets={categoryBuckets}
             transactions={transactions}
-            imports={imports}
-            onDeleteImportBatch={handleDeleteImportBatch}
-            onAddTransactions={handleAddTransactions}
-            reportTransactions={filteredTransactions}
-            onDeleteTransaction={handleDeleteTransaction}
-            onClearTransactions={handleClearTransactions}
+            accounts={accounts}
+            onAddAccount={handleAddAccount}
+            onUpdateAccount={handleUpdateAccount}
+            onDeleteAccount={handleDeleteAccount}
           />
         )}
 
-        {activeTab === "transactions" && (
+        {activeTab === "activity" && (
           <TransactionsPage
-            theme={theme}
             cardClass={cardClass}
             transactions={transactions}
             imports={imports}
+            categoryBuckets={categoryBuckets}
             onDeleteImportBatch={handleDeleteImportBatch}
             onAddTransactions={handleAddTransactions}
             onUpdateTransaction={handleUpdateTransaction}
             onDeleteTransaction={handleDeleteTransaction}
             onClearTransactions={handleClearTransactions}
+            onOpenReview={() => setReviewOpen(true)}
           />
         )}
 
-        {activeTab === "budget" && (
-          <BudgetPage
+        {activeTab === "insights" && (
+          <InsightsPage
             cardClass={cardClass}
-            monthSummary={monthSummary}
+            transactions={filteredTransactions}
             budget={budget}
             setBudget={setBudget}
             budgetTotals={budgetTotals}
+            monthSummary={monthSummary}
           />
         )}
 
-        {activeTab === "goals" && (
-          <GoalsPage
+        {activeTab === "profile" && (
+          <ProfilePage
             cardClass={cardClass}
+            user={user}
+            accounts={accounts}
+            onAddAccount={handleAddAccount}
+            onUpdateAccount={handleUpdateAccount}
+            onDeleteAccount={handleDeleteAccount}
             goals={goals}
             onAddGoal={handleAddGoal}
             onUpdateGoal={handleUpdateGoal}
             onDeleteGoal={handleDeleteGoal}
             onContributeGoal={handleContributeGoal}
+            settings={settings}
+            onUpdateSettings={handleUpdateSettings}
+            categoryBuckets={categoryBuckets}
+            onUpdateCategoryBucket={handleUpdateCategoryBucket}
           />
         )}
-
-        {activeTab === "reports" && (
-          <ReportsPage cardClass={cardClass} transactions={filteredTransactions} />
-        )}
       </main>
+
+      <BottomTabBar
+        items={NAV_ITEMS}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        badges={{ activity: needsReviewCount }}
+      />
+
+      {reviewOpen && (
+        <ReviewFlow
+          transactions={transactions}
+          categoryBuckets={categoryBuckets}
+          onUpdateTransaction={handleUpdateTransaction}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
     </div>
   );
 }

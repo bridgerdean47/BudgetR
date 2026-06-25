@@ -1,6 +1,9 @@
 // src/pages/TransactionsPage.jsx
 import { useState, useMemo, useRef } from "react";
 import { parseCsv } from "../lib/csv";
+import { CATEGORY_OPTIONS } from "../lib/categories";
+import { resolveBucket, BUCKET_LABELS } from "../lib/buckets";
+import TransactionCard from "../components/TransactionCard.jsx";
 
 /* -------------------------------------------------
    CATEGORY MEMORY (learn from manual edits)
@@ -59,32 +62,6 @@ function lookupRememberedCategory(description) {
   const map = loadCategoryMemory();
   return map[key] || null;
 }
-
-/* -------------------------------------------------
-   CATEGORY OPTIONS
--------------------------------------------------- */
-const CATEGORY_OPTIONS = [
-  "Uncategorized",
-  "Credit Card",
-  "Rent",
-  "Credit Card Payments",
-  "Loans",
-  "Insurance",
-  "Groceries",
-  "Food & Drink",
-  "Shopping",
-  "Bills & Utilities",
-  "Entertainment",
-  "Gas",
-  "Automotive",
-  "Health & Wellness",
-  "Pets",
-  "Travel",
-  "Personal",
-  "Cable/Satellite Services",
-  "To Checking",
-  "To Savings",
-];
 
 /* -------------------------------------------------
    MERCHANT CATEGORY OVERRIDES
@@ -191,7 +168,7 @@ function getMonthKeyFromDate(dateStr) {
 
   const m = dateStr.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
   if (m) {
-    let [_, mm, dd, yy] = m;
+    let [, mm, , yy] = m;
     mm = mm.padStart(2, "0");
     const year = yy.length === 2 ? `20${yy}` : yy;
     return `${year}-${mm}`;
@@ -226,15 +203,16 @@ function formatMonthLabel(key) {
    COMPONENT
 -------------------------------------------------- */
 export default function TransactionsPage({
-  theme,
   cardClass,
   transactions,
   imports,
+  categoryBuckets,
   onDeleteImportBatch,
   onAddTransactions,
   onUpdateTransaction,
   onDeleteTransaction,
   onClearTransactions,
+  onOpenReview,
 }) {
   const [editing, setEditing] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -242,6 +220,8 @@ export default function TransactionsPage({
   const [sortConfig, setSortConfig] = useState({ key: "date", direction: "desc" });
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [bucketFilter, setBucketFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef(null);
   const getFileSig = (f) => `${f.name}::${f.size}::${f.lastModified}`;
 
@@ -450,59 +430,96 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
       );
     }
 
+    // FILTER (bucket)
+    if (bucketFilter !== "all") {
+      data = data.filter((t) => resolveBucket(t, categoryBuckets) === bucketFilter);
+    }
+
+    // FILTER (search)
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      data = data.filter((t) => (t.description || "").toLowerCase().includes(q));
+    }
+
     return data;
-  }, [transactions, sortConfig, categoryFilter, selectedMonth]);
+  }, [transactions, sortConfig, categoryFilter, selectedMonth, bucketFilter, searchQuery, categoryBuckets]);
+
+  const uncategorizedCount = useMemo(
+    () => (transactions || []).filter((t) => resolveBucket(t, categoryBuckets) === null).length,
+    [transactions, categoryBuckets]
+  );
 
   const renderSortIcon = (key) =>
     sortConfig.key !== key ? (
-      <span className="text-[0.6rem] text-gray-500">⇅</span>
+      <span className="text-[0.6rem] text-fgSubtle">⇅</span>
     ) : (
-      <span className="text-[0.6rem] text-gray-300">
+      <span className="text-[0.6rem] text-fgMuted">
         {sortConfig.direction === "asc" ? "▲" : "▼"}
       </span>
     );
 
-  // Display helpers — driven ONLY by stored type
-  const typeLabel = (t) => {
-    if (t.type === "credit_card") return "Credit Card";
-    if (t.type === "income") return "Income";
-    if (t.type === "transfer") return "Transfer";
-    return "Expense";
-  };
-
-  const typeClass = (t) => {
-    if (t.type === "credit_card") return "text-yellow-400";
-    if (t.type === "income") return "text-green-400";
-    if (t.type === "transfer") return "text-blue-400";
-    return "text-red-500";
-  };
-
   /* -----------------------------------------------
      RENDER
   -------------------------------------------------- */
+  const bucketChipClass = (id) =>
+    "px-3 py-1 rounded-full text-xs border transition " +
+    (bucketFilter === id
+      ? "border-accent bg-accent/10 text-accent"
+      : "border-subtle text-fgMuted hover:border-accent hover:text-accent");
+
   return (
     <div className="space-y-6">
       {/* HEADER */}
-      <div className="space-y-2 flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-100">Transactions</h2>
-          <p className="text-gray-400 text-sm">
-            Upload a bank CSV or click a row to edit it.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-3xl font-bold text-fg">Activity</h2>
         <button
           type="button"
           onClick={onClearTransactions}
-          className="text-xs px-4 py-1.5 rounded-full border border-gray-600 text-gray-300 hover:border-red-500 hover:text-red-300"
+          className="text-xs px-4 py-1.5 rounded-full border border-subtle text-fgMuted hover:border-red-500 hover:text-red-300"
         >
           Clear All
         </button>
       </div>
 
+      {/* SEARCH + REVIEW */}
+      <div className="flex items-center gap-3">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search Transactions"
+          className="flex-1 rounded-full border border-subtle bg-app px-4 py-2 text-sm text-fg outline-none focus:border-accent"
+        />
+        <button
+          type="button"
+          onClick={onOpenReview}
+          className="relative shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
+        >
+          Review
+          {uncategorizedCount > 0 && (
+            <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[0.65rem] font-semibold text-white">
+              {uncategorizedCount > 99 ? "99+" : uncategorizedCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* BUCKET FILTER CHIPS */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={bucketChipClass("all")} onClick={() => setBucketFilter("all")}>
+          All
+        </button>
+        {["needs", "wants", "savings"].map((key) => (
+          <button key={key} type="button" className={bucketChipClass(key)} onClick={() => setBucketFilter(key)}>
+            {BUCKET_LABELS[key]}
+          </button>
+        ))}
+      </div>
+
       {/* Imported CSV history */}
       {Array.isArray(imports) && imports.length > 0 && (
         <section className={cardClass}>
-          <h3 className="mb-3 text-xs font-semibold tracking-[0.28em] text-red-400">
+          <h3 className="mb-3 text-xs font-semibold tracking-[0.28em] text-accent">
             IMPORT HISTORY
           </h3>
 
@@ -510,13 +527,13 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
             {imports.map((b) => (
               <div
                 key={b.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-gray-700 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-xl border border-subtle px-3 py-2"
               >
                 <div className="min-w-0">
-                  <div className="text-gray-200 truncate">
+                  <div className="text-fg truncate">
                     {(b.files || []).map((f) => f.name).join(", ")}
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-fgMuted">
                     {new Date(b.importedAt).toLocaleString()} • {b.count}{" "}
                     transactions
                   </div>
@@ -525,7 +542,7 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
                 <button
                   type="button"
                   onClick={() => onDeleteImportBatch(b.id)}
-                  className="shrink-0 text-xs px-3 py-1 rounded-full border border-gray-600 text-gray-300 hover:border-red-500 hover:text-red-300"
+                  className="shrink-0 text-xs px-3 py-1 rounded-full border border-subtle text-fgMuted hover:border-red-500 hover:text-red-300"
                 >
                   Delete import
                 </button>
@@ -537,7 +554,7 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
 
       {/* IMPORT CARD */}
       <section className={cardClass}>
-        <h3 className="text-xs font-semibold tracking-[0.28em] text-red-400">
+        <h3 className="text-xs font-semibold tracking-[0.28em] text-accent">
           BANK STATEMENT IMPORT (CSV)
         </h3>
 
@@ -549,15 +566,15 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
           className={
             "mt-4 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-6 cursor-pointer transition " +
             (isDragging
-              ? "border-red-400 bg-red-500/10"
-              : "border-red-700 bg-black/40 hover:border-red-500 hover:bg-red-500/5")
+              ? "border-accent bg-accent/10"
+              : "border-accent/40 bg-app/40 hover:border-accent hover:bg-accent/5")
           }
         >
-          <p className="text-gray-200 font-medium mb-1">
+          <p className="text-fg font-medium mb-1">
             Drag & drop CSV file(s) here
           </p>
-          <p className="text-gray-400">
-            or <span className="text-red-300 underline">click to browse</span>
+          <p className="text-fgMuted">
+            or <span className="text-accent underline">click to browse</span>
           </p>
 
           <input
@@ -571,20 +588,20 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
         </div>
 
         {importMessage && (
-          <p className="text-[0.7rem] text-gray-400 mt-2">{importMessage}</p>
+          <p className="text-[0.7rem] text-fgMuted mt-2">{importMessage}</p>
         )}
       </section>
 
-      {/* TABLE CARD */}
+      {/* TRANSACTION LIST */}
       <section className={cardClass}>
         <div className="mb-3 flex flex-wrap items-center gap-3">
           {/* Month filter */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Month:</span>
+            <span className="text-xs text-fgMuted">Month:</span>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-[#050505] border border-gray-700 text-xs rounded px-2 py-1 text-gray-200"
+              className="bg-app border border-subtle text-xs rounded px-2 py-1 text-fg"
             >
               {monthOptions.map((key) => (
                 <option key={key} value={key}>
@@ -596,11 +613,11 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
 
           {/* Category filter */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Category:</span>
+            <span className="text-xs text-fgMuted">Category:</span>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="bg-[#050505] border border-gray-700 text-xs rounded px-2 py-1 text-gray-200"
+              className="bg-app border border-subtle text-xs rounded px-2 py-1 text-fg"
             >
               <option value="all">All</option>
               {CATEGORY_OPTIONS.map((cat) => (
@@ -611,137 +628,65 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
             </select>
           </div>
 
+          {/* Sort by date */}
+          <button
+            type="button"
+            onClick={() => handleSortClick("date")}
+            className="flex items-center gap-1 text-xs text-fgMuted hover:text-fg"
+          >
+            <span>Date</span>
+            {renderSortIcon("date")}
+          </button>
+
           {/* Clear */}
-          {(categoryFilter !== "all" || selectedMonth !== "all") && (
+          {(categoryFilter !== "all" || selectedMonth !== "all" || bucketFilter !== "all" || searchQuery) && (
             <button
               type="button"
               onClick={() => {
                 setCategoryFilter("all");
                 setSelectedMonth("all");
+                setBucketFilter("all");
+                setSearchQuery("");
               }}
-              className="text-xs text-gray-400 hover:text-gray-200 underline"
+              className="text-xs text-fgMuted hover:text-fg underline"
             >
               Clear filters
             </button>
           )}
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-red-900/60">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-[#111111] text-gray-200 border-b border-red-900">
-                <th className="px-4 py-3 text-left font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => handleSortClick("date")}
-                    className="flex items-center gap-1 select-none"
-                  >
-                    <span>Date</span>
-                    {renderSortIcon("date")}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-left font-semibold">
-                  Description
-                </th>
-                <th className="px-4 py-3 text-left font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => handleSortClick("type")}
-                    className="flex items-center gap-1 select-none"
-                  >
-                    <span>Type</span>
-                    {renderSortIcon("type")}
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-left font-semibold">Category</th>
-                <th className="px-4 py-3 text-left font-semibold">Amount</th>
-                <th className="px-4 py-3 text-center font-semibold">Del</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedTransactions.map((t, i) => (
-                <tr
-                  key={`${t.id}-${i}`}
-                  onClick={() => setEditing(t)}
-                  className="cursor-pointer border-b border-gray-800 transition-colors transform hover:bg-[#111111] hover:translate-x-1"
-                >
-                  <td className="px-4 py-2 text-gray-200">{t.date}</td>
-                  <td className="px-4 py-2 text-gray-100">{t.description}</td>
+        <div className="space-y-2">
+          {sortedTransactions.map((t, i) => (
+            <TransactionCard
+              key={`${t.id}-${i}`}
+              tx={t}
+              bucket={resolveBucket(t, categoryBuckets)}
+              onClick={() => setEditing(t)}
+              onDelete={() => onDeleteTransaction(t.id)}
+            />
+          ))}
 
-                  <td className={`px-4 py-2 ${typeClass(t)}`}>
-                    {typeLabel(t)}
-                  </td>
-
-                  {/* Category dropdown */}
-                  <td className="px-4 py-2 text-gray-100">
-                    <select
-                      className="bg-[#050505] border border-gray-700 text-xs rounded px-2 py-1"
-                      value={t.category || "Uncategorized"}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        const nextCat = e.target.value;
-                        rememberCategory(t.description, nextCat);
-                        onUpdateTransaction({
-                          ...t,
-                          category: nextCat,
-                        });
-                      }}
-                    >
-                      {CATEGORY_OPTIONS.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-
-                  <td className="px-4 py-2 text-gray-100">
-                    ${(Number(t.amount) || 0).toFixed(2)}
-                  </td>
-
-                  <td className="px-4 py-2 text-center">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteTransaction(t.id);
-                      }}
-                      className="text-xs text-gray-500 hover:text-red-400"
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              ))}
-
-              {sortedTransactions.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-6 text-center text-gray-500"
-                  >
-                    No transactions yet. Import a CSV to see them here.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          {sortedTransactions.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-fgSubtle">
+              No transactions yet. Import a CSV to see them here.
+            </p>
+          )}
         </div>
       </section>
 
       {/* MODAL EDITOR */}
       {editing && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="bg-[#101010] rounded-xl p-6 w-full max-w-md shadow-xl space-y-4 border border-red-700">
-            <h3 className="text-xl font-semibold mb-2 text-gray-100">
+          <div className="bg-surface rounded-xl p-6 w-full max-w-md shadow-xl space-y-4 border border-subtle">
+            <h3 className="text-xl font-semibold mb-2 text-fg">
               Edit Transaction
             </h3>
 
             <div className="space-y-1">
-              <label className="text-sm text-gray-300">Description</label>
+              <label className="text-sm text-fgMuted">Description</label>
               <input
                 type="text"
-                className="w-full p-2 rounded bg-black text-gray-100 border border-gray-800"
+                className="w-full p-2 rounded bg-app text-fg border border-subtle"
                 value={editing.description}
                 onChange={(e) =>
                   setEditing({ ...editing, description: e.target.value })
@@ -750,10 +695,10 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm text-gray-300">Date</label>
+              <label className="text-sm text-fgMuted">Date</label>
               <input
                 type="text"
-                className="w-full p-2 rounded bg-black text-gray-100 border border-gray-800"
+                className="w-full p-2 rounded bg-app text-fg border border-subtle"
                 value={editing.date}
                 onChange={(e) =>
                   setEditing({ ...editing, date: e.target.value })
@@ -762,9 +707,9 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm text-gray-300">Type</label>
+              <label className="text-sm text-fgMuted">Type</label>
               <select
-                className="w-full p-2 rounded bg-black text-gray-100 border border-gray-800"
+                className="w-full p-2 rounded bg-app text-fg border border-subtle"
                 value={
                   editing.type === "payment" || editing.type === "credit"
                     ? "transfer"
@@ -782,9 +727,9 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm text-gray-300">Category</label>
+              <label className="text-sm text-fgMuted">Category</label>
               <select
-                className="w-full p-2 rounded bg-black text-gray-100 border border-gray-800"
+                className="w-full p-2 rounded bg-app text-fg border border-subtle"
                 value={editing.category || "Uncategorized"}
                 onChange={(e) =>
                   setEditing({ ...editing, category: e.target.value })
@@ -799,10 +744,10 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm text-gray-300">Amount</label>
+              <label className="text-sm text-fgMuted">Amount</label>
               <input
                 type="number"
-                className="w-full p-2 rounded bg-black text-gray-100 border border-gray-800"
+                className="w-full p-2 rounded bg-app text-fg border border-subtle"
                 value={editing.amount}
                 onChange={(e) =>
                   setEditing({
@@ -815,13 +760,13 @@ if (String(tx.category || "").toLowerCase() === "credit card payments") {
 
             <div className="flex justify-end gap-3 pt-4">
               <button
-                className="px-4 py-2 rounded bg-gray-800 text-gray-100 hover:bg-gray-700"
+                className="px-4 py-2 rounded bg-subtle/50 text-fg hover:bg-subtle"
                 onClick={() => setEditing(null)}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-500"
+                className="px-4 py-2 rounded bg-accent text-white hover:bg-accent/90"
                 onClick={() => {
                   const normalizedType =
                     editing.type === "payment" || editing.type === "credit"

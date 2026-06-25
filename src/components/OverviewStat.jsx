@@ -4,7 +4,7 @@ export default function OverviewStat({ label, value, color }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="text-xs tracking-widest text-gray-400">{label}</div>
+      <div className="text-xs tracking-widest text-fgMuted">{label}</div>
       <div className={`text-2xl font-semibold ${color}`}>
         {num.toLocaleString("en-US", {
           style: "currency",

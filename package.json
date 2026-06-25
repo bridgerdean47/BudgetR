@@ -9,10 +9,17 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "cap:sync": "CAP_BUILD=1 npm run build && npx cap sync ios",
+    "cap:open:ios": "npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "firebase": "^12.6.0",
+    "framer-motion": "^12.42.0",
     "papaparse": "^5.5.3",
     "plotly.js": "^3.3.0",
     "react": "^19.2.0",
@@ -21,6 +28,8 @@
     "recharts": "^3.5.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.4.1",
     "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

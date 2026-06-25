@@ -4,14 +4,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        appBlack: "#050505",
-        appBlackSoft: "#0b0b0b",
-        appBlackRaised: "#111111",
-        appBorder: "#1f1f1f",
-        appRed: "#e50914",
-        appRedDark: "#b0060f",
-        appRedSoft: "#ff4b5c",
-        appTextMuted: "#9ca3af",
+        app: "rgb(var(--color-bg) / <alpha-value>)",
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
+        subtle: "rgb(var(--color-border) / <alpha-value>)",
+        fg: "rgb(var(--color-fg) / <alpha-value>)",
+        fgMuted: "rgb(var(--color-fg-muted) / <alpha-value>)",
+        fgSubtle: "rgb(var(--color-fg-subtle) / <alpha-value>)",
+        accent: "rgb(var(--color-accent) / <alpha-value>)",
+        heroFrom: "rgb(var(--color-hero-from) / <alpha-value>)",
+        heroTo: "rgb(var(--color-hero-to) / <alpha-value>)",
       },
       boxShadow: {
         appSoft: "0 10px 25px rgba(0,0,0,0.5)",

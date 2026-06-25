@@ -28,19 +28,19 @@ export default function LoginPage({ cardClass }) {
   return (
     <div className="max-w-md mx-auto">
       <section className={cardClass}>
-        <h2 className="text-2xl font-bold text-gray-100 mb-2">
+        <h2 className="text-2xl font-bold text-fg mb-2">
           {mode === "login" ? "Log in" : "Create account"}
         </h2>
 
         <form onSubmit={submit} className="space-y-3">
           <input
-            className="w-full rounded bg-black border border-gray-700 p-2 text-gray-100"
+            className="w-full rounded bg-app border border-subtle p-2 text-fg focus:border-accent outline-none"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <input
-            className="w-full rounded bg-black border border-gray-700 p-2 text-gray-100"
+            className="w-full rounded bg-app border border-subtle p-2 text-fg focus:border-accent outline-none"
             placeholder="Password"
             type="password"
             value={password}
@@ -50,7 +50,7 @@ export default function LoginPage({ cardClass }) {
           {err && <p className="text-xs text-red-300">{err}</p>}
 
           <button
-            className="w-full px-4 py-2 rounded bg-red-600 text-white hover:bg-red-500"
+            className="w-full px-4 py-2 rounded bg-accent text-white hover:bg-accent/90"
             type="submit"
           >
             {mode === "login" ? "Log in" : "Sign up"}
@@ -60,7 +60,7 @@ export default function LoginPage({ cardClass }) {
         <button
           type="button"
           onClick={() => setMode((m) => (m === "login" ? "signup" : "login"))}
-          className="mt-3 text-xs text-gray-300 hover:text-red-300"
+          className="mt-3 text-xs text-fgMuted hover:text-accent"
         >
           {mode === "login"
             ? "Need an account? Sign up"

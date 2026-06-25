@@ -1,0 +1,23 @@
+// src/lib/categories.js
+export const CATEGORY_OPTIONS = [
+  "Uncategorized",
+  "Credit Card",
+  "Rent",
+  "Credit Card Payments",
+  "Loans",
+  "Insurance",
+  "Groceries",
+  "Food & Drink",
+  "Shopping",
+  "Bills & Utilities",
+  "Entertainment",
+  "Gas",
+  "Automotive",
+  "Health & Wellness",
+  "Pets",
+  "Travel",
+  "Personal",
+  "Cable/Satellite Services",
+  "To Checking",
+  "To Savings",
+];
